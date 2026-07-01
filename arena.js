@@ -93,8 +93,10 @@ function buildArena(scene) {
 
   [-1, 1].forEach(s => {
     const t = new THREE.Mesh(new THREE.BoxGeometry(ARENA.W, 0.5, 0.5), new THREE.MeshStandardMaterial({ color: 0x2f8bff, emissive: 0x2f8bff, emissiveIntensity: 0.6 }));
+    t.userData.accent = true;
     t.position.set(0, 0.3, s * HALF_L); grp.add(t);
     const t2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, ARENA.L), new THREE.MeshStandardMaterial({ color: 0xff8a1a, emissive: 0xff8a1a, emissiveIntensity: 0.4 }));
+    t2.userData.accent = true;
     t2.position.set(s * HALF_W, 0.3, 0); grp.add(t2);
   });
 
@@ -139,9 +141,9 @@ function buildArena(scene) {
   for (let t = 0; t < 7; t++) {
     const y = ARENA.WALL_H + 1 + t * 3.6, inset = t * 4.4;
     const longGeo = new THREE.BoxGeometry(ARENA.W + 26 + inset * 2, 3.2, 6.5);
-    [HALF_L + 12 + inset, -(HALF_L + 12 + inset)].forEach(z => { const m = new THREE.Mesh(longGeo, standMat); m.position.set(0, y, z); m.rotation.x = z > 0 ? -0.25 : 0.25; grp.add(m); });
+    [HALF_L + 12 + inset, -(HALF_L + 12 + inset)].forEach(z => { const m = new THREE.Mesh(longGeo, standMat); m.position.set(0, y, z); m.rotation.x = z > 0 ? -0.25 : 0.25; m.userData.crowd = true; grp.add(m); });
     const sideGeo = new THREE.BoxGeometry(6.5, 3.2, ARENA.L + 26 + inset * 2);
-    [HALF_W + 12 + inset, -(HALF_W + 12 + inset)].forEach(x => { const m = new THREE.Mesh(sideGeo, standMat); m.position.set(x, y, 0); m.rotation.z = x > 0 ? 0.25 : -0.25; grp.add(m); });
+    [HALF_W + 12 + inset, -(HALF_W + 12 + inset)].forEach(x => { const m = new THREE.Mesh(sideGeo, standMat); m.position.set(x, y, 0); m.rotation.z = x > 0 ? 0.25 : -0.25; m.userData.crowd = true; grp.add(m); });
   }
 
   // --- jumbotron: a four-sided screen hanging above center ---
@@ -209,6 +211,7 @@ function buildArena(scene) {
   [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(s => {
     const pylon = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, ARENA.WALL_H, 8),
       new THREE.MeshStandardMaterial({ color: 0x2f8bff, emissive: 0x2f8bff, emissiveIntensity: 0.6 }));
+    pylon.userData.accent = true;
     pylon.position.set(s[0] * (HALF_W - 1), ARENA.WALL_H / 2, s[1] * (HALF_L - 1)); grp.add(pylon);
   });
 

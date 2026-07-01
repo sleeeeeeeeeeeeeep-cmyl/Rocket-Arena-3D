@@ -306,7 +306,7 @@
   function styleCar(group, color, decalId) {
     const decalTex = makeDecalTexture(decalId, color);
     group.traverse(o => {
-      if (o.isMesh && o.material) {
+      if (o.isMesh && o.material && !o.userData.carPart) {   // skip wheels/glass/lights/shadow
         o.material = o.material.clone();
         o.material.color = new THREE.Color(color);
         if (decalTex) { o.material.map = decalTex; }
@@ -318,19 +318,80 @@
   function applyArenaTheme(id) {
     const th = ARENA_THEMES.find(t => t.id === id) || ARENA_THEMES[0];
     scene.background = new THREE.Color(th.sky);
-    // fog only as a distant backdrop haze — start well beyond the field so it never bleaches play
     scene.fog = new THREE.Fog(th.fog, 320, 900);
+    const accent = new THREE.Color(th.accent);
+    // per-theme floor finish: some arenas are glossy (ice/neon/orbital), some matte (day/desert)
+    const glossy = ['ice', 'neon', 'orbital', 'aquatic', 'synth'].indexOf(id) >= 0;
     if (arenaGrp) arenaGrp.traverse(o => {
-      if (o.userData && o.userData.turf) {
+      if (!o.material) return;
+      if (o.userData.turf) {
         const base = new THREE.Color(th.turf);
-        // stripes: clear light/dark mow bands derived from the theme's turf colour
         if (o.userData.stripe === 1) base.offsetHSL(0, 0.05, 0.10);
         else if (o.userData.stripe === 0) base.offsetHSL(0, 0.05, -0.06);
         o.material.color = base;
-        if (o.material.transparent) o.material.opacity = 0.7; // less see-through so stripes read as turf, not haze
+        o.material.roughness = glossy ? 0.25 : 0.85;
+        o.material.metalness = glossy ? 0.5 : 0.05;
+        if (o.material.transparent) o.material.opacity = 0.7;
         o.material.needsUpdate = true;
+      } else if (o.userData.accent) {
+        o.material.color = accent.clone();
+        if (o.material.emissive) { o.material.emissive = accent.clone(); o.material.emissiveIntensity = 0.7; }
+        o.material.needsUpdate = true;
+      } else if (o.userData.crowd) {
+        // tint the crowd toward the theme accent so stands read differently per arena
+        const c = accent.clone().offsetHSL(0, -0.25, -0.1);
+        o.material.color = c;
+        if (o.material.emissive) o.material.emissive = accent.clone().multiplyScalar(0.25);
+        o.material.needsUpdate = true;
+      } else if (o.userData.led) {
+        // handled by loop animation, but seed with accent
       }
     });
+    // theme the LED perimeter base color
+    if (arenaGrp && arenaGrp.userData.animated && arenaGrp.userData.animated.led) {
+      arenaGrp.userData.animated.led.userData.accent = th.accent;
+    }
+    buildThemeProps(th);
+  }
+
+  // per-theme atmospheric prop layer (rebuilt each theme change)
+  let themePropGroup = null;
+  function buildThemeProps(th) {
+    if (themePropGroup) { scene.remove(themePropGroup); themePropGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+    themePropGroup = new THREE.Group(); scene.add(themePropGroup);
+    const accent = new THREE.Color(th.accent);
+    const HW = ARENA.HALF_W, HL = ARENA.HALF_L, WH = ARENA.WALL_H;
+    // floating atmosphere particles whose look depends on the theme
+    const kinds = { volcano: 'ember', aquatic: 'bubble', neon: 'spark', synth: 'spark', orbital: 'star', desert: 'dust', ice: 'snow', night: 'spark', champ: 'confetti', sunset: 'dust', day: 'none' };
+    const kind = kinds[th.id] || 'none';
+    if (kind !== 'none') {
+      const n = 120;
+      const geo = new THREE.BufferGeometry(); const pos = [];
+      for (let i = 0; i < n; i++) pos.push((Math.random() - 0.5) * ARENA.W * 1.2, Math.random() * WH * 1.4, (Math.random() - 0.5) * ARENA.L * 1.2);
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      let col = accent, size = 1.6, rise = true;
+      if (kind === 'ember') { col = new THREE.Color(0xff5a1f); size = 1.4; }
+      else if (kind === 'bubble') { col = new THREE.Color(0x9ffff0); size = 1.8; }
+      else if (kind === 'snow') { col = new THREE.Color(0xffffff); size = 1.6; rise = false; }
+      else if (kind === 'dust') { col = new THREE.Color(0xd8a070); size = 1.2; }
+      else if (kind === 'star') { col = new THREE.Color(0xffffff); size = 1.2; rise = false; }
+      else if (kind === 'confetti') { col = new THREE.Color(0xffd24a); size = 2.0; rise = false; }
+      const mat = new THREE.PointsMaterial({ color: col, size, transparent: true, opacity: 0.8, depthWrite: false, blending: kind === 'snow' || kind === 'confetti' ? THREE.NormalBlending : THREE.AdditiveBlending });
+      const pts = new THREE.Points(geo, mat);
+      pts.userData.drift = kind; pts.userData.rise = rise;
+      themePropGroup.add(pts);
+    }
+    // theme centerpiece behind a goal: retro sun / planet / volcano glow
+    if (th.id === 'synth' || th.id === 'sunset') {
+      const sun = new THREE.Mesh(new THREE.CircleGeometry(28, 40), new THREE.MeshBasicMaterial({ color: th.id === 'synth' ? 0xff10f0 : 0xffb347, transparent: true, opacity: 0.6 }));
+      sun.position.set(0, 20, -HL - 60); themePropGroup.add(sun);
+    } else if (th.id === 'orbital') {
+      const planet = new THREE.Mesh(new THREE.SphereGeometry(34, 24, 20), new THREE.MeshStandardMaterial({ color: 0x2a6aff, emissive: 0x113366, roughness: 0.8 }));
+      planet.position.set(-80, 70, -HL - 90); themePropGroup.add(planet);
+    } else if (th.id === 'volcano') {
+      const glow = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.W, ARENA.L), new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.rotation.x = -Math.PI / 2; glow.position.y = 0.15; themePropGroup.add(glow);
+    }
   }
   function makeCar(group, team) {
     return { group, team, pos: new V3(), vel: new V3(), yaw: team === 'blue' ? 0 : Math.PI,
@@ -385,7 +446,9 @@
       const x = col * HALF_W * 0.45;
       const z = sideSign * HALF_L * (0.5 + (i % 2) * 0.12);
       arr[i].pos.set(x, CAR_REST_Y, z);
-      arr[i].yaw = sideSign > 0 ? Math.PI : 0;
+      // face the centre of the field (toward the ball), not the back wall.
+      // blue spawns at +Z and must face -Z (yaw 0); orange spawns at -Z and faces +Z (yaw π).
+      arr[i].yaw = sideSign > 0 ? 0 : Math.PI;
       arr[i].vel.set(0, 0, 0); arr[i].boost = START_BOOST; arr[i].onGround = true;
     }
   }
@@ -420,7 +483,7 @@
         // respawn near own goal
         const ownZ = car.team === 'blue' ? HALF_L : -HALF_L;
         car.pos.set((Math.random() - 0.5) * HALF_W, CAR_REST_Y, ownZ * 0.7);
-        car.yaw = car.team === 'blue' ? Math.PI : 0;
+        car.yaw = car.team === 'blue' ? 0 : Math.PI;
         car.vel.set(0, 0, 0); car.boost = 33;
         if (car.group) car.group.visible = true;
       }
@@ -428,6 +491,7 @@
     }
     const speed = Math.hypot(car.vel.x, car.vel.z);
     const boostWanted = input.boost && car.boost > 0;
+    car._steer = input.s || 0;
     if (car.onGround) {
       fwd(car.yaw, _f);
       // steering: always turn the same way for a given key (no reverse-flip), scaled gently by speed
@@ -710,9 +774,19 @@
   function syncVisual(car) {
     car.group.position.set(car.pos.x, car.pos.y, car.pos.z);
     car.group.rotation.y = car.yaw;
-    // spin placeholder wheels
-    const roll = (car.vel.x * -Math.sin(car.yaw) + car.vel.z * -Math.cos(car.yaw)) * 0.05;
-    car.wheels.forEach(w => { w.rotation.x += roll * (w.userData.flip || 1); });
+    // forward speed along the car heading, for wheel roll
+    const fx = -Math.sin(car.yaw), fz = -Math.cos(car.yaw);
+    const fSpeed = car.vel.x * fx + car.vel.z * fz;
+    const steer = car._steer || 0;
+    car.group.userData.wheels && car.group.userData.wheels.forEach(w => {
+      w.rotation.x += fSpeed * 0.09;                          // roll
+      if (w.userData.front) w.rotation.y = steer * 0.5;       // visual steering on fronts
+    });
+    // brake lights glow when reversing/braking
+    if (car.group.userData.brakeLights) {
+      const braking = ((car.human && keys.KeyS) || fSpeed < -1) ? 1 : 0;
+      car.group.userData.brakeLights.forEach(m => { m.emissiveIntensity += ((braking ? 1.2 : 0) - m.emissiveIntensity) * 0.3; });
+    }
   }
 
   function updateCamera(dt) {
@@ -794,6 +868,21 @@
       const a = arenaGrp.userData.animated;
       if (a.center) a.center.material.opacity = 0.25 + Math.abs(Math.sin(t * 1.5)) * 0.3;
       if (a.led) { const hue = (t * 0.05) % 1; a.led.children.forEach(s => s.material.color.setHSL(hue, 0.8, 0.6)); }
+    }
+    // animate theme atmosphere (embers rise, snow falls, etc.)
+    if (themePropGroup) {
+      themePropGroup.children.forEach(o => {
+        if (o.userData && o.userData.drift) {
+          const arr = o.geometry.attributes.position.array;
+          const rise = o.userData.rise;
+          for (let i = 1; i < arr.length; i += 3) {
+            arr[i] += (rise ? 1 : -1) * dt * 4;
+            if (rise && arr[i] > ARENA.WALL_H * 1.4) arr[i] = 0;
+            if (!rise && arr[i] < 0) arr[i] = ARENA.WALL_H * 1.4;
+          }
+          o.geometry.attributes.position.needsUpdate = true;
+        }
+      });
     }
     for (const c of allCars) syncVisual(c);
     if (ball) {
