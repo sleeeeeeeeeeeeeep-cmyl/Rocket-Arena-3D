@@ -43,7 +43,8 @@ function normalizeModel(root, targetLength, faceFix) {
   const wrap = new THREE.Group();
   root.position.sub(center);
   root.position.y += (size.y / 2);
-  if (faceFix) root.rotation.y += faceFix;
+  // NOTE: faceFix is a COSMETIC offset applied in syncVisual (group.rotation.y = yaw + faceFix),
+  // never baked into the model or the physics frame. Do not rotate root by faceFix here.
   // glossy car paint shell (clearcoat if available, else standard). Replaces the noisy print texture.
   root.traverse(o => { if (o.isMesh && o.material) { o.castShadow = true;
     let m;
@@ -58,6 +59,7 @@ function normalizeModel(root, targetLength, faceFix) {
   dressCar(wrap, size, box.min.clone());
   wrap.add(root);
   wrap.scale.setScalar(scale);
+  wrap.userData.faceFix = faceFix || 0;
   return wrap;
 }
 
@@ -111,6 +113,20 @@ function dressCar(wrap, size, min) {
     bl.position.set(s * W * 0.3, bottom + H * 0.42, L * 0.48); tagPart(bl); wrap.add(bl);
     wrap.userData.brakeLights = wrap.userData.brakeLights || [];
     wrap.userData.brakeLights.push(bl.material);
+  }
+
+  // --- boost flames: twin cones at the rear, hidden until boosting ---
+  wrap.userData.flames = [];
+  const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb24a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+  for (let s = -1; s <= 1; s += 2) {
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(W * 0.12, L * 0.5, 12), flameMat.clone());
+    flame.rotation.x = -Math.PI / 2;                      // point backward (+Z, behind the -Z nose)
+    flame.position.set(s * W * 0.2, bottom + H * 0.32, L * 0.5);
+    flame.visible = false;
+    const core = new THREE.Mesh(new THREE.ConeGeometry(W * 0.06, L * 0.32, 10), new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+    core.rotation.x = -Math.PI / 2; core.position.set(0, 0, -L * 0.06); flame.add(core);
+    tagPart(flame);
+    wrap.add(flame); wrap.userData.flames.push(flame);
   }
 
   // --- contact shadow: soft dark blob under the car ---

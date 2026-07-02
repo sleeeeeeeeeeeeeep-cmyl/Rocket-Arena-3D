@@ -18,13 +18,24 @@
   let profile = { credits: 0, cars: ['car1','car2','car3'], decals: ['none','stripes'], stats: { wins: 0, goals: 0, demos: 0, matches: 0 } };
   function loadProfile() {
     try { const raw = localStorage.getItem(SAVE_KEY); if (raw) { const p = JSON.parse(raw); profile = Object.assign(profile, p); profile.stats = Object.assign({ wins:0,goals:0,demos:0,matches:0 }, p.stats||{}); } } catch (e) {}
+    // restore customization (migrate gracefully — defaults if absent)
+    if (typeof profile.bodyColor === 'number') playerColor = profile.bodyColor;
+    if (typeof profile.wheelColor === 'number') wheelColor = profile.wheelColor;
+    if (typeof profile.decal === 'string') chosenDecal = profile.decal;
+    if (typeof profile.arena === 'string') chosenArena = profile.arena;
+    if (typeof profile.car === 'string') chosenCarId = profile.car;
+  }
+  function saveCustomization() {
+    profile.bodyColor = playerColor; profile.wheelColor = wheelColor;
+    profile.decal = chosenDecal; profile.arena = chosenArena; profile.car = chosenCarId;
+    saveProfile();
   }
   function saveProfile() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(profile)); } catch (e) {} }
   function ownsCar(id) { return (CAR_PRICES[id] || 0) === 0 || profile.cars.indexOf(id) >= 0; }
   function ownsDecal(id) { return (DECAL_PRICES[id] || 0) === 0 || profile.decals.indexOf(id) >= 0; }
 
   let matchTime = 300, matchLen = 300, chosenCarId = 'car1', chosenMutator = 'none', playerColor = 0xffffff;
-  let chosenDecal = 'none', chosenArena = 'night';
+  let chosenDecal = 'none', chosenArena = 'night', wheelColor = 0xd7dbe2;
   const DECALS = [
     { id: 'none', name: 'None' },
     { id: 'stripes', name: 'Stripes' },
@@ -176,8 +187,19 @@
         b.className = 'carbtn' + (col === playerColor ? ' on' : '');
         b.style.background = '#' + col.toString(16).padStart(6, '0');
         b.style.width = '34px'; b.style.height = '34px'; b.style.padding = '0';
-        b.onclick = () => { playerColor = col; [...cpk.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); refreshPreview(); };
+        b.onclick = () => { playerColor = col; [...cpk.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); saveCustomization(); refreshPreview(); };
         cpk.appendChild(b);
+      });
+    }
+    const wpk = DOM('wheelpick'); if (wpk) { wpk.innerHTML = '';
+      const wcolors = [0xd7dbe2, 0x2a2e36, 0xffffff, 0xff3b3b, 0x2f8bff, 0xffd23f, 0x2bd34a, 0xff4ab8, 0x00e5d0];
+      wcolors.forEach(col => {
+        const b = document.createElement('button');
+        b.className = 'carbtn' + (col === wheelColor ? ' on' : '');
+        b.style.background = '#' + col.toString(16).padStart(6, '0');
+        b.style.width = '34px'; b.style.height = '34px'; b.style.padding = '0';
+        b.onclick = () => { wheelColor = col; [...wpk.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); saveCustomization(); refreshPreview(); };
+        wpk.appendChild(b);
       });
     }
     const dpk = DOM('decalpick'); if (dpk) { dpk.innerHTML = '';
@@ -190,7 +212,7 @@
           if (ownsDecal(dc.id)) { chosenDecal = dc.id; }
           else if (profile.credits >= DECAL_PRICES[dc.id]) { profile.credits -= DECAL_PRICES[dc.id]; profile.decals.push(dc.id); saveProfile(); chosenDecal = dc.id; }
           else { flashCredits(); return; }
-          buildMenu(); refreshPreview();
+          saveCustomization(); buildMenu(); refreshPreview();
         };
         dpk.appendChild(b);
       });
@@ -203,7 +225,7 @@
         const accHex = '#' + th.accent.toString(16).padStart(6, '0');
         const turfHex = '#' + th.turf.toString(16).padStart(6, '0');
         b.innerHTML = '<span class="swatch" style="background:linear-gradient(160deg,' + skyHex + ' 0%,' + skyHex + ' 55%,' + turfHex + ' 56%,' + turfHex + ' 100%);box-shadow:inset 0 0 0 2px ' + accHex + '"></span>' + th.name;
-        b.onclick = () => { chosenArena = th.id; [...apk.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+        b.onclick = () => { chosenArena = th.id; [...apk.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); saveCustomization(); };
         apk.appendChild(b);
       });
     }
@@ -242,6 +264,7 @@
     if (token !== pvLoadToken) return; // a newer selection superseded this load
     if (pvCar) { pvScene.remove(pvCar); }
     styleCar(grp, playerColor, chosenDecal);
+    applyWheelColor(grp, wheelColor);
     pvCar = grp; pvScene.add(pvCar);
   }
   function pvAnimate() {
@@ -302,6 +325,12 @@
     else if (decalId === 'camo') { const cols = ['#3a4a2a', '#55663a', '#2a331c', '#6a7a4a']; g.fillStyle = cols[0]; g.fillRect(0, 0, 256, 256); for (let k = 0; k < 80; k++) { g.fillStyle = cols[k % cols.length]; g.beginPath(); g.ellipse(Math.random() * 256, Math.random() * 256, 18 + Math.random() * 24, 14 + Math.random() * 16, Math.random() * 3, 0, Math.PI * 2); g.fill(); } }
     const t = new THREE.CanvasTexture(c); if (THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
     return t;
+  }
+  function applyWheelColor(group, color) {
+    if (group.userData && group.userData.rimMat) {
+      group.userData.rimMat.color = new THREE.Color(color);
+      group.userData.rimMat.needsUpdate = true;
+    }
   }
   function styleCar(group, color, decalId) {
     const decalTex = makeDecalTexture(decalId, color);
@@ -395,7 +424,9 @@
   }
   function makeCar(group, team) {
     return { group, team, pos: new V3(), vel: new V3(), yaw: team === 'blue' ? 0 : Math.PI,
-      onGround: true, boost: START_BOOST, boosting: false, demoTimer: 0, wheels: group.userData.wheels || [] };
+      onGround: true, boost: START_BOOST, boosting: false, demoTimer: 0,
+      faceFix: (group.userData && group.userData.faceFix) || 0,
+      wheels: group.userData.wheels || [] };
   }
 
   async function startMatch() {
@@ -408,6 +439,7 @@
     // player = blue slot 0. Player's chosen colour, or team blue if left default.
     const pGroup = await loadCar(pEntry, 0x2f8bff, 0x9ed1ff);
     styleCar(pGroup, playerColor === 0xffffff ? 0x2f8bff : playerColor, chosenDecal);
+    applyWheelColor(pGroup, wheelColor);
     scene.add(pGroup);
     player = makeCar(pGroup, 'blue'); player.isPlayer = true; player.human = true;
     blueCars.push(player);
@@ -712,7 +744,7 @@
     for (let i = 0; i < allCars.length && i < snap.cars.length; i++) {
       const c = allCars[i], s = snap.cars[i];
       c.pos.set(s.x, s.y, s.z); c.yaw = s.yaw;
-      if (c.group) { c.group.position.set(s.x, s.y, s.z); c.group.rotation.y = s.yaw; c.group.visible = s.vis; }
+      if (c.group) { c.group.position.set(s.x, s.y, s.z); c.group.rotation.y = s.yaw + (c.faceFix || 0); c.group.visible = s.vis; }
     }
     ball.pos.set(snap.bx, snap.by, snap.bz);
     if (ball.mesh) ball.mesh.position.copy(ball.pos);
@@ -773,7 +805,7 @@
 
   function syncVisual(car) {
     car.group.position.set(car.pos.x, car.pos.y, car.pos.z);
-    car.group.rotation.y = car.yaw;
+    car.group.rotation.y = car.yaw + (car.faceFix || 0);   // faceFix is cosmetic-only
     // forward speed along the car heading, for wheel roll
     const fx = -Math.sin(car.yaw), fz = -Math.cos(car.yaw);
     const fSpeed = car.vel.x * fx + car.vel.z * fz;
@@ -786,6 +818,18 @@
     if (car.group.userData.brakeLights) {
       const braking = ((car.human && keys.KeyS) || fSpeed < -1) ? 1 : 0;
       car.group.userData.brakeLights.forEach(m => { m.emissiveIntensity += ((braking ? 1.2 : 0) - m.emissiveIntensity) * 0.3; });
+    }
+    // boost flames: show + flicker when boosting
+    if (car.group.userData.flames) {
+      const on = !!car.boosting;
+      car.group.userData.flames.forEach(fl => {
+        fl.visible = on;
+        if (on) {
+          const flick = 0.8 + Math.random() * 0.5;
+          fl.scale.set(flick, 0.8 + Math.random() * 0.7, flick);
+          fl.material.opacity = 0.7 + Math.random() * 0.3;
+        }
+      });
     }
   }
 
