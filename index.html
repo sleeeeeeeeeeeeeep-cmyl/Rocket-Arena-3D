@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rocket Arena 3D</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#05070f;font-family:'Segoe UI',system-ui,sans-serif;color:#eaf2ff;user-select:none}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+  #hud{position:absolute;inset:0;pointer-events:none}
+  #score{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:38px;font-weight:900;letter-spacing:2px;
+    background:linear-gradient(90deg,rgba(31,99,214,.55),rgba(10,14,26,.85) 35%,rgba(10,14,26,.85) 65%,rgba(224,116,20,.55));
+    padding:6px 34px;border-radius:14px;border:1px solid rgba(140,180,255,.25);
+    box-shadow:0 8px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(6px)}
+  #score .b{color:#5ec4ff;text-shadow:0 0 14px rgba(70,185,255,.7)}
+  #score .o{color:#ffa04a;text-shadow:0 0 14px rgba(255,138,26,.7)}
+  #score .vs{opacity:.45;margin:0 16px;font-weight:400}
+  #timer{position:absolute;top:76px;left:50%;transform:translateX(-50%);font-size:20px;font-weight:800;letter-spacing:2px;color:#eaf2ff;
+    background:rgba(10,14,26,.7);padding:3px 18px;border-radius:999px;border:1px solid rgba(140,180,255,.2)}
+  #timer.low{color:#ff5a5a;border-color:rgba(255,90,90,.5);animation:tick 1s steps(2) infinite}
+  @keyframes tick{50%{opacity:.55}}
+  #boost{position:absolute;right:26px;bottom:26px;display:flex;align-items:flex-end;gap:12px;
+    background:rgba(10,14,26,.55);padding:12px 14px;border-radius:16px;border:1px solid rgba(255,200,80,.25);backdrop-filter:blur(6px)}
+  #boost .bar{width:20px;height:160px;border-radius:12px;background:rgba(255,255,255,.07);overflow:hidden;position:relative;border:1px solid rgba(255,200,80,.35);box-shadow:inset 0 2px 8px rgba(0,0,0,.5)}
+  #boost .fill{position:absolute;left:0;bottom:0;width:100%;background:linear-gradient(180deg,#fff6c8,#ffce3a 40%,#ff8a1a);height:33%;box-shadow:0 0 16px rgba(255,190,60,.8);transition:height .08s linear}
+  #boost .n{font-size:34px;font-weight:900;color:#ffd23f;min-width:58px;text-align:center;text-shadow:0 0 16px rgba(255,190,60,.6)}
+  #loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#05070f;z-index:10}
+  #loading .sp{width:54px;height:54px;border:5px solid rgba(120,170,255,.2);border-top-color:#46b9ff;border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #menu{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0;background:radial-gradient(1100px 600px at 50% -5%,rgba(47,110,255,.35),transparent 60%),radial-gradient(800px 500px at 80% 100%,rgba(255,138,26,.18),transparent 60%),linear-gradient(160deg,#070d1c,#0a0f1e);z-index:9;overflow-y:auto}
+  #menu .panel{background:rgba(12,18,34,.72);backdrop-filter:blur(8px);border:1px solid rgba(120,170,255,.22);border-radius:20px;padding:26px 34px;max-width:620px;width:90%;box-shadow:0 24px 80px rgba(0,0,0,.5);margin:24px auto}
+  #menu h1{font-size:60px;letter-spacing:8px;margin:0;text-align:center;background:linear-gradient(180deg,#bfe0ff,#2f8bff 70%,#1f63d6);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px rgba(47,139,255,.5));font-weight:900}
+  #menu .sub{opacity:.65;margin:2px 0 16px;text-align:center;letter-spacing:1px}
+  #menu .seclabel{font-size:12px;letter-spacing:3px;opacity:.55;margin:16px 0 8px;text-align:center;text-transform:uppercase}
+  #pick,#mutpick,#teampick,#lenpick,#colorpick,#wheelpick,#explopick,#accentpick{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  #arenapick{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-height:170px;overflow-y:auto;padding:4px}
+  .carbtn{pointer-events:auto;padding:9px 15px;border-radius:10px;border:1px solid rgba(120,170,255,.25);background:rgba(255,255,255,.05);color:#dce8ff;cursor:pointer;font-size:14px;transition:.15s}
+  .carbtn:hover{background:rgba(120,170,255,.18);transform:translateY(-1px)}
+  .carbtn.on{background:linear-gradient(180deg,#2f8bff,#1f63d6);border-color:transparent;box-shadow:0 6px 18px rgba(47,139,255,.4)}
+  .arenabtn{pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 10px;border-radius:11px;border:1px solid rgba(120,170,255,.25);background:rgba(255,255,255,.05);color:#dce8ff;cursor:pointer;font-size:12px;transition:.15s}
+  .arenabtn:hover{background:rgba(120,170,255,.18);transform:translateY(-1px)}
+  .arenabtn.on{border-color:#2f8bff;box-shadow:0 6px 18px rgba(47,139,255,.4),0 0 0 1px #2f8bff}
+  .arenabtn .swatch{width:54px;height:34px;border-radius:7px;display:block}
+  .btn{pointer-events:auto;font-size:19px;font-weight:800;letter-spacing:1px;color:#fff;background:linear-gradient(180deg,#33d17a,#1f9d5a);border:0;padding:16px 50px;border-radius:14px;cursor:pointer;box-shadow:0 10px 28px rgba(40,180,90,.4);margin-top:22px;transition:.15s}
+  .btn:hover{filter:brightness(1.08);transform:translateY(-2px)}
+  .btn:active{transform:scale(.97)}
+  .btn.alt{background:linear-gradient(180deg,#3a4866,#27324a);box-shadow:0 10px 28px rgba(0,0,0,.4)}
+  .btn.small{font-size:14px;padding:10px 20px;margin:0}
+  #garage{position:absolute;inset:0;z-index:9;background:radial-gradient(1100px 600px at 50% -5%,rgba(47,110,255,.3),transparent 60%),linear-gradient(160deg,#070d1c,#0a0f1e);display:flex;align-items:center;justify-content:center}
+  .gpanel{background:rgba(12,18,34,.72);backdrop-filter:blur(8px);border:1px solid rgba(120,170,255,.22);border-radius:20px;padding:22px 26px;width:92%;max-width:900px;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+  .ghead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .ghead h2{margin:0;font-size:30px;letter-spacing:4px;background:linear-gradient(180deg,#bfe0ff,#2f8bff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .gbody{display:flex;gap:24px;flex-wrap:wrap}
+  .gpreview{flex:1;min-width:280px;display:flex;flex-direction:column;align-items:center}
+  #previewCanvas{width:100%;height:300px;border-radius:14px;background:linear-gradient(160deg,#0c1426,#10182e);border:1px solid rgba(120,170,255,.18)}
+  #previewName{margin-top:10px;font-size:20px;font-weight:800;letter-spacing:2px;color:#dce8ff}
+  .gcontrols{flex:1;min-width:260px}
+  #credits{font-size:20px;font-weight:800;color:#ffd23f;text-shadow:0 0 10px rgba(255,210,63,.4)}
+  .carbtn.locked{opacity:.6;border-color:rgba(255,210,63,.4)}
+  .carbtn .price{font-size:11px;color:#ffd23f;margin-left:6px}
+  .thumbbtn,.explobtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 10px;min-width:84px;line-height:1.25;text-align:center}
+  .thumbbtn>div,.explobtn>div{display:block;white-space:nowrap}
+  .btn{pointer-events:auto;font-size:18px;font-weight:700;letter-spacing:1px;color:#fff;background:linear-gradient(180deg,#2f8bff,#1f63d6);border:0;padding:16px 40px;border-radius:14px;cursor:pointer;box-shadow:0 8px 26px rgba(47,139,255,.45)}
+  .btn:active{transform:scale(.96)}
+  .hide{display:none!important}
+  #pick{display:flex;gap:10px;flex-wrap:wrap;max-width:520px;justify-content:center}
+  .carbtn{pointer-events:auto;padding:10px 16px;border-radius:10px;border:1px solid rgba(120,170,255,.3);background:rgba(255,255,255,.05);color:#dce8ff;cursor:pointer;font-size:14px}
+  .carbtn.on{background:linear-gradient(180deg,#2f8bff,#1f63d6);border-color:transparent}
+  #muteBtn{position:absolute;top:18px;right:18px;pointer-events:auto;font-size:22px;background:rgba(255,255,255,.08);border:1px solid rgba(120,170,255,.3);border-radius:10px;width:48px;height:48px;cursor:pointer}
+  #centerMsg{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%) scale(.9);font-size:88px;font-weight:900;letter-spacing:6px;
+    text-shadow:0 4px 26px rgba(0,0,0,.75),0 0 40px currentColor;opacity:0;transition:opacity .2s,transform .2s}
+  #centerMsg.show{transform:translate(-50%,-50%) scale(1)}
+  #centerMsg.show{opacity:1}
+  #ssIndic{position:absolute;bottom:34px;right:90px;font-size:16px;font-weight:800;letter-spacing:3px;color:#ffd23f;text-shadow:0 0 12px #ff8a1a;opacity:0;transition:opacity .15s}
+  #ssIndic.show{opacity:1}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;transition:opacity .1s}
+  #flash.go{opacity:.7}
+  #replayBar{position:absolute;inset:0;z-index:8;display:none;pointer-events:none}
+  #replayBar.show{display:block}
+  #replayBar .rtag{position:absolute;top:24px;left:50%;transform:translateX(-50%);font-family:inherit;font-weight:800;letter-spacing:3px;font-size:18px;color:#fff;background:rgba(8,12,22,.7);padding:8px 20px;border-radius:999px;border:1px solid rgba(255,255,255,.2)}
+  #replayBar .rtag::first-letter{color:#ff3b3b}
+  #skipReplay{position:absolute;bottom:30px;right:30px;pointer-events:auto;font-weight:800;letter-spacing:2px;font-size:16px;color:#fff;background:linear-gradient(180deg,#2f8bff,#1f63d6);border:0;padding:14px 26px;border-radius:12px;cursor:pointer;box-shadow:0 8px 24px rgba(47,139,255,.5)}
+  #pauseMenu{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(4,7,14,.72);backdrop-filter:blur(4px)}
+  .ppanel{display:flex;flex-direction:column;gap:14px;align-items:center;background:rgba(12,18,34,.85);border:1px solid rgba(120,170,255,.25);border-radius:18px;padding:34px 48px}
+  .ppanel h2{margin:0 0 6px;font-size:34px;letter-spacing:6px;background:linear-gradient(180deg,#bfe0ff,#2f8bff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #speedo{position:absolute;left:24px;bottom:24px;font-size:26px;font-weight:800;letter-spacing:1px;color:#eaf2ff;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+  #bcIndic{font-size:12px;letter-spacing:2px;opacity:.65;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud" class="hide">
+  <div id="score"><span class="b" id="sB">0</span><span class="vs">:</span><span class="o" id="sO">0</span></div>
+  <div id="timer">5:00</div>
+  <div id="centerMsg"></div>
+  <div id="ssIndic">SUPERSONIC</div>
+  <div id="boost"><div class="n" id="bn">33</div><div class="bar"><div class="fill" id="bf"></div></div></div>
+  <button id="muteBtn">🔊</button>
+</div>
+<audio id="bgMusic" src="music.mp3" loop preload="auto"></audio>
+<div id="flash"></div>
+<div id="replayBar">
+  <span class="rtag">● REPLAY</span>
+  <button id="skipReplay">SKIP ▸</button>
+</div>
+<div id="pauseMenu" class="hide">
+  <div class="ppanel">
+    <h2>PAUSED</h2>
+    <button class="btn" id="resumeBtn">RESUME ▸</button>
+    <button class="btn alt" id="quitBtn">QUIT TO MENU</button>
+  </div>
+</div>
+<div id="speedo" class="hide"><span id="kph">0</span> KPH<div id="bcIndic">BALL CAM: OFF</div></div>
+<div id="loading"><div class="sp"></div><div>Loading models…</div></div>
+<div id="menu" class="hide">
+  <div class="panel">
+    <h1>ROCKET ARENA</h1>
+    <div class="sub">3D · car soccer</div>
+    <div id="menuStats" style="text-align:center;font-size:13px;opacity:.8;margin-bottom:6px"></div>
+    <div class="seclabel">Mode</div>
+    <div id="mutpick"></div>
+    <div class="seclabel">Team Size</div>
+    <div id="teampick"></div>
+    <div class="seclabel">Arena</div>
+    <div id="arenapick"></div>
+    <div class="seclabel">Match Length</div>
+    <div id="lenpick"></div>
+    <div style="text-align:center;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <button class="btn alt" id="garageBtn">🔧 GARAGE</button>
+      <button class="btn" id="play">PLAY ▸</button>
+    </div>
+    <div class="sub" style="font-size:12px;margin-top:16px">WASD drive · Shift boost · Space jump · C ball-cam · drag mouse to look</div>
+  </div>
+  <div style="position:fixed;bottom:8px;right:10px;font-size:11px;opacity:.5">BUILD v28 · menu-layout-fix · working-explosion-preview · conforming-glass · slim-wheels · deglitch</div>
+</div>
+
+<div id="garage" class="hide">
+  <div class="gpanel">
+    <div class="ghead"><h2>GARAGE</h2><span id="credits">◉ 0</span><button class="btn small" id="garageBack">◂ BACK</button></div>
+    <div class="gbody">
+      <div class="gpreview"><canvas id="previewCanvas"></canvas><div id="previewName">—</div></div>
+      <div class="gcontrols">
+        <div class="seclabel">Car</div><div id="pick"></div>
+        <div class="seclabel">Color</div><div id="colorpick"></div>
+        <div class="seclabel">Accent (patterns)</div><div id="accentpick"></div>
+        <div class="seclabel">Decal</div><div id="decalpick"></div>
+        <div class="seclabel">Goal Explosion</div><div id="explopick"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js + GLTFLoader from CDN (only external deps; everything else is local) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script src="cars.js"></script>
+<script src="arena.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
